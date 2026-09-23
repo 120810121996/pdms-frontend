@@ -97,42 +97,64 @@ function setupSidebar(activePage) {
 // ===== Logout =====
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('logoutBtn')?.addEventListener('click', () => {
-    confirm('Déconnexion', 'Êtes-vous sûr de vouloir vous déconnecter de votre session ?', () => {
-      clearAuth();
-      window.location.href = '/';
-    });
+    confirm(
+      'Déconnexion',
+      'Voulez-vous vraiment vous déconnecter de votre session PDMS ?',
+      () => {
+        clearAuth();
+        window.location.href = '/';
+      },
+      {
+        icon: '🚪',
+        okText: 'Se déconnecter',
+        cancelText: 'Rester connecté',
+        btnClass: 'btn-primary'
+      }
+    );
   });
 });
 
-
 // ===== Confirm Modal =====
-function confirm(title, message, onOk) {
+function confirm(title, message, onOk, opts = {}) {
   const ov = document.getElementById('confirmOverlay');
   if (!ov) {
     if (window.confirm(`${title}\n\n${message}`)) onOk();
     return;
   }
+
+  const iconEl = ov.querySelector('.confirm-icon');
+  if (iconEl) iconEl.textContent = opts.icon || '⚠️';
+
   document.getElementById('confirmTitle').textContent = title;
-
   document.getElementById('confirmMsg').textContent = message;
-  ov.classList.add('open');
 
-  const ok = document.getElementById('confirmOk');
-  const cancel = document.getElementById('confirmCancel');
+  const okBtn = document.getElementById('confirmOk');
+  const cancelBtn = document.getElementById('confirmCancel');
+
+  if (okBtn) {
+    okBtn.textContent = opts.okText || 'Confirmer';
+    okBtn.className = `btn ${opts.btnClass || 'btn-danger'}`;
+  }
+  if (cancelBtn) {
+    cancelBtn.textContent = opts.cancelText || 'Annuler';
+  }
+
+  ov.classList.add('open');
 
   function close() {
     ov.classList.remove('open');
-    ok.removeEventListener('click', doOk);
-    cancel.removeEventListener('click', close);
+    okBtn?.removeEventListener('click', doOk);
+    cancelBtn?.removeEventListener('click', close);
     ov.removeEventListener('click', bgClose);
   }
   function doOk() { close(); onOk(); }
   function bgClose(e) { if (e.target === ov) close(); }
 
-  ok.addEventListener('click', doOk);
-  cancel.addEventListener('click', close);
+  okBtn?.addEventListener('click', doOk);
+  cancelBtn?.addEventListener('click', close);
   ov.addEventListener('click', bgClose);
 }
+
 
 // ===== Open/Close modal helpers =====
 function openModal(id) { document.getElementById(id)?.classList.add('open'); }
