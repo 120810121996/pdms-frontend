@@ -105,10 +105,11 @@ document.addEventListener('DOMContentLoaded', () => {
         window.location.href = '/';
       },
       {
-        icon: '🚪',
+        icon: '⚠️',
+        subText: 'Cette action est irréversible.',
         okText: 'Se déconnecter',
         cancelText: 'Rester connecté',
-        btnClass: 'btn-primary'
+        btnClass: 'btn-danger'
       }
     );
   });
@@ -118,7 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function confirm(title, message, onOk, opts = {}) {
   const ov = document.getElementById('confirmOverlay');
   if (!ov) {
-    if (window.confirm(`${title}\n\n${message}`)) onOk();
+    if (window.confirm(`${title}\n\n${message}${opts.subText ? '\n\n' + opts.subText : ''}`)) onOk();
     return;
   }
 
@@ -127,6 +128,20 @@ function confirm(title, message, onOk, opts = {}) {
 
   document.getElementById('confirmTitle').textContent = title;
   document.getElementById('confirmMsg').textContent = message;
+
+  let subEl = document.getElementById('confirmSub');
+  if (!subEl) {
+    subEl = document.createElement('p');
+    subEl.id = 'confirmSub';
+    subEl.className = 'confirm-sub';
+    subEl.style.cssText = 'text-align:center;font-size:.82rem;color:var(--err);margin-top:6px;font-weight:500';
+    const msgEl = document.getElementById('confirmMsg');
+    if (msgEl) msgEl.after(subEl);
+  }
+  if (subEl) {
+    subEl.textContent = opts.subText || '';
+    subEl.style.display = opts.subText ? 'block' : 'none';
+  }
 
   const okBtn = document.getElementById('confirmOk');
   const cancelBtn = document.getElementById('confirmCancel');
@@ -154,6 +169,7 @@ function confirm(title, message, onOk, opts = {}) {
   cancelBtn?.addEventListener('click', close);
   ov.addEventListener('click', bgClose);
 }
+
 
 
 // ===== Open/Close modal helpers =====
