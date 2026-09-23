@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDMS — Administration</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="app">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo"><div class="logo-icon">📋</div><span class="logo-text">PDMS</span></div>
+    <div class="sidebar-nav">
+      <a href="/dashboard" class="nav-item" data-page="dashboard"><span class="nav-icon">🏠</span>Tableau de bord</a>
+      <a href="/projects" class="nav-item" data-page="projects"><span class="nav-icon">📁</span>Mes Projets</a>
+      <div class="nav-label">Administration</div>
+      <a href="/admin" class="nav-item" data-page="admin"><span class="nav-icon">⚙️</span>Utilisateurs</a>
+    </div>
+    <div class="sidebar-footer">
+      <div class="avatar" id="sidebarAvatar">A</div>
+      <div class="user-info"><div class="user-name" id="sidebarName">…</div><div class="user-role" id="sidebarRole">…</div></div>
+      <button class="btn-logout" id="logoutBtn" title="Déconnexion">↪</button>
+    </div>
+  </nav>
+
+  <main class="main">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">⚙️ Administration</h1>
+        <p class="page-sub">Gestion des utilisateurs et des projets</p>
+      </div>
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-secondary" id="btnSyncPg" onclick="syncPostgresBackup()">🐘 Sauvegarde PostgreSQL</button>
+        <button class="btn btn-primary" id="btnNewUser">+ Nouvel utilisateur</button>
+      </div>
+
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-grid" id="adminStats" style="margin-bottom:28px">
+      <div class="stat c-indigo"><div class="stat-icon">👥</div><div class="stat-value" id="sUsers">—</div><div class="stat-label">Utilisateurs</div></div>
+      <div class="stat c-blue"><div class="stat-icon">📁</div><div class="stat-value" id="sProjects">—</div><div class="stat-label">Projets</div></div>
+      <div class="stat c-green"><div class="stat-icon">📄</div><div class="stat-value" id="sDocs">—</div><div class="stat-label">Documents</div></div>
+      <div class="stat c-yellow"><div class="stat-icon">✅</div><div class="stat-value" id="sTasks">—</div><div class="stat-label">Tâches</div></div>
+      <div class="stat c-red"><div class="stat-icon">⚠️</div><div class="stat-value" id="sOverdue">—</div><div class="stat-label">Tâches en retard</div></div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="users" onclick="switchTab('users')">👥 Utilisateurs</button>
+      <button class="tab-btn" data-tab="assignprojects" onclick="switchTab('assignprojects')">🔗 Assignation projets</button>
+    </div>
+
+    <!-- Users Tab -->
+    <div class="tab-panel active" id="tab-users">
+      <div class="flex items-center gap-3 mb-4">
+        <div class="search-wrap" style="flex:1;max-width:320px">
+          <span class="search-icon">🔍</span>
+          <input type="text" class="search-input" id="searchUsers" placeholder="Rechercher un utilisateur…">
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Nom</th><th>Email</th><th>Rôle</th><th>Projets</th><th>Créé le</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="usersTable">
+            <tr><td colspan="6" style="text-align:center;padding:32px"><div class="spinner" style="margin:0 auto"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Assign Projects Tab -->
+    <div class="tab-panel" id="tab-assignprojects">
+      <div class="card" style="max-width:600px">
+        <h3 class="card-title" style="margin-bottom:20px">🔗 Assigner un utilisateur à un projet</h3>
+        <div class="form-group">
+          <label class="form-label">Projet</label>
+          <select id="assignProject" class="form-select"></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Utilisateur</label>
+          <select id="assignUser" class="form-select"></select>
+        </div>
+        <div style="display:flex;gap:10px">
+          <button class="btn btn-primary" id="btnAssign">Assigner</button>
+          <button class="btn btn-danger" id="btnRemove">Retirer</button>
+        </div>
+        <div id="assignResult" style="margin-top:14px;font-size:.85rem;color:var(--t2)"></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- User Modal -->
+<div class="overlay" id="userOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 class="modal-title" id="userModalTitle">Nouvel utilisateur</h2>
+      <button class="modal-close" onclick="closeModal('userOverlay')">✕</button>
+    </div>
+    <form id="userForm">
+      <input type="hidden" id="userId">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Nom complet *</label>
+          <input type="text" id="userName" class="form-input" placeholder="Jean Dupont" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Rôle</label>
+          <select id="userRole" class="form-select">
+            <option value="user">Utilisateur</option>
+            <option value="admin">Administrateur</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email *</label>
+        <input type="email" id="userEmail" class="form-input" placeholder="jean@example.com" required>
+      </div>
+      <div class="form-group">
+        <label class="form-label" id="passwordLabel">Mot de passe *</label>
+        <input type="password" id="userPassword" class="form-input" placeholder="Minimum 6 caractères">
+        <p class="form-hint" id="passwordHint"></p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('userOverlay')">Annuler</button>
+        <button type="submit" class="btn btn-primary" id="userSubmitBtn">Créer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Confirm dialog -->
+<div class="overlay" id="confirmOverlay">
+  <div class="modal" style="max-width:380px">
+    <div class="confirm-icon">🗑️</div>
+    <h3 class="modal-title text-center" id="confirmTitle">Confirmer</h3>
+    <p class="confirm-msg" id="confirmMsg"></p>
+    <p class="confirm-sub">Cette action est irréversible.</p>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="confirmCancel">Annuler</button>
+      <button class="btn btn-danger" id="confirmOk">Supprimer</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/js/app.js"></script>
+<script>
+  if (!requireAdminRole()) throw new Error('not admin');
+  setupSidebar('admin');
+
+  let allUsers = [];
+  let allProjects = [];
+
+  function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + tab));
+  }
+
+  async function loadStats() {
+    try {
+      const s = await api('/projects/stats/overview');
+      document.getElementById('sUsers').textContent = s.total_users;
+      document.getElementById('sProjects').textContent = s.total_projects;
+      document.getElementById('sDocs').textContent = s.total_documents;
+      document.getElementById('sTasks').textContent = s.total_tasks;
+      document.getElementById('sOverdue').textContent = s.overdue_tasks;
+    } catch(e) { toast(e.message, 'error'); }
+  }
+
+  async function loadUsers() {
+    try {
+      allUsers = await api('/users');
+      renderUsers();
+    } catch(e) { toast(e.message, 'error'); }
+  }
+
+  function renderUsers() {
+    const q = document.getElementById('searchUsers').value.toLowerCase();
+    const list = q ? allUsers.filter(u => u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)) : allUsers;
+    const tbody = document.getElementById('usersTable');
+    if (!list.length) {
+      tbody.innerHTML = `<tr><td colspan="6"><div class="empty"><span class="empty-icon">👥</span><h3>Aucun utilisateur</h3></div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = list.map(u => `
+      <tr>
+        <td><div style="display:flex;align-items:center;gap:10px">
+          <div class="avatar" style="width:30px;height:30px;font-size:.75rem">${u.name.charAt(0).toUpperCase()}</div>
+          <strong>${u.name}</strong>
+        </div></td>
+        <td>${u.email}</td>
+        <td><span class="badge badge-${u.role}">${u.role === 'admin' ? 'Admin' : 'Utilisateur'}</span></td>
+        <td>${u.project_count} projet(s)</td>
+        <td>${fmtDate(u.created_at)}</td>
+        <td>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-secondary btn-xs" onclick="editUser(${u.id})">✏️ Modifier</button>
+            <button class="btn btn-danger btn-xs" onclick="deleteUser(${u.id}, '${u.name.replace(/'/g,"\\'")}')">🗑</button>
+          </div>
+        </td>
+      </tr>`).join('');
+  }
+
+  function openNewUser() {
+    document.getElementById('userId').value = '';
+    document.getElementById('userName').value = '';
+    document.getElementById('userEmail').value = '';
+    document.getElementById('userPassword').value = '';
+    document.getElementById('userRole').value = 'user';
+    document.getElementById('userModalTitle').textContent = 'Nouvel utilisateur';
+    document.getElementById('userSubmitBtn').textContent = 'Créer';
+    document.getElementById('passwordLabel').textContent = 'Mot de passe *';
+    document.getElementById('passwordHint').textContent = '';
+    document.getElementById('userPassword').required = true;
+    openModal('userOverlay');
+  }
+
+  function editUser(id) {
+    const u = allUsers.find(x => x.id === id);
+    if (!u) return;
+    document.getElementById('userId').value = u.id;
+    document.getElementById('userName').value = u.name;
+    document.getElementById('userEmail').value = u.email;
+    document.getElementById('userPassword').value = '';
+    document.getElementById('userRole').value = u.role;
+    document.getElementById('userModalTitle').textContent = 'Modifier l\'utilisateur';
+    document.getElementById('userSubmitBtn').textContent = 'Enregistrer';
+    document.getElementById('passwordLabel').textContent = 'Nouveau mot de passe';
+    document.getElementById('passwordHint').textContent = 'Laissez vide pour ne pas changer.';
+    document.getElementById('userPassword').required = false;
+    openModal('userOverlay');
+  }
+
+  async function deleteUser(id, name) {
+    confirm('Supprimer l\'utilisateur', `Supprimer "${name}" définitivement ?`, async () => {
+      try {
+        await api(`/users/${id}`, { method: 'DELETE' });
+        toast('Utilisateur supprimé', 'success');
+        loadUsers(); loadStats();
+      } catch(e) { toast(e.message, 'error'); }
+    });
+  }
+
+  document.getElementById('btnNewUser').addEventListener('click', openNewUser);
+
+  document.getElementById('userForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const id = document.getElementById('userId').value;
+    const body = {
+      name: document.getElementById('userName').value.trim(),
+      email: document.getElementById('userEmail').value.trim(),
+      role: document.getElementById('userRole').value
+    };
+    const pw = document.getElementById('userPassword').value;
+    if (pw) body.password = pw;
+    try {
+      if (id) await api(`/users/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+      else {
+        if (!pw) return toast('Mot de passe requis pour un nouvel utilisateur', 'warning');
+        body.password = pw;
+        await api('/users', { method: 'POST', body: JSON.stringify(body) });
+      }
+      toast(id ? 'Utilisateur mis à jour' : 'Utilisateur créé !', 'success');
+      closeModal('userOverlay');
+      loadUsers(); loadStats();
+    } catch(ex) { toast(ex.message, 'error'); }
+  });
+
+  document.getElementById('searchUsers').addEventListener('input', renderUsers);
+
+  // ===== Assign projects tab =====
+  async function loadAssignData() {
+    try {
+      const [projects, users] = await Promise.all([api('/projects'), api('/users/all-for-select')]);
+      allProjects = projects;
+      const ps = document.getElementById('assignProject');
+      ps.innerHTML = projects.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+      const us = document.getElementById('assignUser');
+      us.innerHTML = users.map(u => `<option value="${u.id}">${u.name} (${u.email})</option>`).join('');
+    } catch(e) { toast(e.message, 'error'); }
+  }
+
+  document.getElementById('btnAssign').addEventListener('click', async () => {
+    const pid = document.getElementById('assignProject').value;
+    const uid = document.getElementById('assignUser').value;
+    try {
+      await api(`/projects/${pid}/members`, { method: 'POST', body: JSON.stringify({ user_id: parseInt(uid) }) });
+      document.getElementById('assignResult').textContent = '✅ Utilisateur assigné au projet avec succès.';
+      toast('Assignation réussie !', 'success');
+    } catch(e) {
+      document.getElementById('assignResult').textContent = '❌ ' + e.message;
+      toast(e.message, 'error');
+    }
+  });
+
+  document.getElementById('btnRemove').addEventListener('click', async () => {
+    const pid = document.getElementById('assignProject').value;
+    const uid = document.getElementById('assignUser').value;
+    try {
+      await api(`/projects/${pid}/members/${uid}`, { method: 'DELETE' });
+      document.getElementById('assignResult').textContent = '✅ Utilisateur retiré du projet.';
+      toast('Membre retiré', 'success');
+    } catch(e) {
+      document.getElementById('assignResult').textContent = '❌ ' + e.message;
+      toast(e.message, 'error');
+    }
+  });
+
+  ['userOverlay','confirmOverlay'].forEach(id => {
+    document.getElementById(id)?.addEventListener('click', e => {
+      if (e.target === e.currentTarget) closeModal(id);
+    });
+  });
+
+  async function syncPostgresBackup() {
+    const btn = document.getElementById('btnSyncPg');
+    const origText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Sauvegarde...';
+    try {
+      const res = await api('/users/sync-postgres', { method: 'POST' });
+      toast(res.message || 'Sauvegarde PostgreSQL réussie !', 'success');
+    } catch (err) {
+      toast(err.message || 'Échec de la sauvegarde PostgreSQL', 'error');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = origText;
+    }
+  }
+
+  // Init
+  loadStats();
+  loadUsers();
+  loadAssignData();
+
+</script>
+</body>
+</html>

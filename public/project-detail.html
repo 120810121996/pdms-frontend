@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDMS — Projet</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <!-- Mammoth for DOCX rendering -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+</head>
+<body>
+<div class="app">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo"><div class="logo-icon">📋</div><span class="logo-text">PDMS</span></div>
+    <div class="sidebar-nav">
+      <a href="/dashboard" class="nav-item" data-page="dashboard"><span class="nav-icon">🏠</span>Tableau de bord</a>
+      <a href="/projects" class="nav-item" data-page="projects"><span class="nav-icon">📁</span>Mes Projets</a>
+      <div class="nav-label admin-only">Administration</div>
+      <a href="/admin" class="nav-item admin-only" data-page="admin"><span class="nav-icon">⚙️</span>Utilisateurs</a>
+    </div>
+    <div class="sidebar-footer">
+      <div class="avatar" id="sidebarAvatar">A</div>
+      <div class="user-info"><div class="user-name" id="sidebarName">…</div><div class="user-role" id="sidebarRole">…</div></div>
+      <button class="btn-logout" id="logoutBtn" title="Déconnexion">↪</button>
+    </div>
+  </nav>
+
+  <main class="main">
+    <!-- Project Header -->
+    <div class="proj-header" id="projHeader">
+      <div class="proj-header-top">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+            <a href="/projects" style="color:var(--t3);font-size:.85rem;text-decoration:none">← Projets</a>
+          </div>
+          <h1 class="page-title" id="projName">Chargement…</h1>
+          <p id="projDesc" class="page-sub mt-3"></p>
+          <div style="display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap">
+            <span id="projStatus" class="badge"></span>
+            <span id="projOwner" class="text-xs text-muted"></span>
+            <span id="projDate" class="text-xs text-muted"></span>
+          </div>
+        </div>
+        <div class="proj-header-actions" id="projHeaderActions"></div>
+      </div>
+      <!-- Members -->
+      <div id="membersArea" style="margin-top:12px"></div>
+      <!-- Progress -->
+      <div class="progress-wrap" id="progressArea" style="margin-top:14px">
+        <div class="progress-info"><span id="progressLabel">Progression des tâches</span><span id="progressPct">0%</span></div>
+        <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+        <div style="display:flex;gap:16px;margin-top:8px;flex-wrap:wrap" id="taskStatsBadges"></div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="documents" onclick="switchTab('documents')">📄 Documents</button>
+      <button class="tab-btn" data-tab="tasks" onclick="switchTab('tasks')">✅ Tâches</button>
+    </div>
+
+    <!-- Documents Tab -->
+    <div class="tab-panel active" id="tab-documents">
+      <div class="card mb-4">
+        <div class="upload-zone" id="uploadZone">
+          <input type="file" id="fileInput" accept=".pdf,.txt,.doc,.docx" multiple>
+          <span class="upload-icon">📂</span>
+          <div class="upload-text">Glissez vos fichiers ici ou cliquez pour sélectionner</div>
+          <div class="upload-hint">PDF, TXT, DOC, DOCX — Maximum 50 MB par fichier</div>
+          <div id="uploadProgress" style="display:none;margin-top:12px">
+            <div class="progress-bar"><div class="progress-fill" id="uploadBar" style="width:0%;transition:width .3s"></div></div>
+            <div class="text-xs text-muted" style="margin-top:6px;text-align:center" id="uploadStatus">Upload en cours…</div>
+          </div>
+        </div>
+      </div>
+      <div id="docList"><div class="loader"><div class="spinner"></div></div></div>
+    </div>
+
+    <!-- Tasks Tab -->
+    <div class="tab-panel" id="tab-tasks">
+      <div class="flex justify-between items-center mb-4 flex-wrap gap-3">
+        <div class="filters" style="margin-bottom:0">
+          <button class="filter-btn active" data-tf="all">Toutes</button>
+          <button class="filter-btn" data-tf="todo">À faire</button>
+          <button class="filter-btn" data-tf="in_progress">En cours</button>
+          <button class="filter-btn" data-tf="done">Terminées</button>
+          <button class="filter-btn" data-tf="high">🔴 Urgent</button>
+        </div>
+        <button class="btn btn-primary" id="btnNewTask">+ Nouvelle tâche</button>
+      </div>
+      <div id="taskList"><div class="loader"><div class="spinner"></div></div></div>
+    </div>
+  </main>
+</div>
+
+<!-- Task Modal -->
+<div class="overlay" id="taskOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 class="modal-title" id="taskModalTitle">Nouvelle tâche</h2>
+      <button class="modal-close" onclick="closeModal('taskOverlay')">✕</button>
+    </div>
+    <form id="taskForm">
+      <input type="hidden" id="taskId">
+      <div class="form-group">
+        <label class="form-label">Titre *</label>
+        <input type="text" id="taskTitle" class="form-input" placeholder="Titre de la tâche" required maxlength="200">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <textarea id="taskDesc" class="form-textarea" placeholder="Détails de la tâche…" rows="3"></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Priorité</label>
+          <select id="taskPriority" class="form-select">
+            <option value="low">🟢 Faible</option>
+            <option value="medium" selected>🟡 Moyen</option>
+            <option value="high">🔴 Urgent</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Statut</label>
+          <select id="taskStatus" class="form-select">
+            <option value="todo">À faire</option>
+            <option value="in_progress">En cours</option>
+            <option value="done">Terminé</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Échéance</label>
+          <input type="datetime-local" id="taskDue" class="form-input">
+          <p class="form-hint">Un rappel email sera envoyé 24h avant.</p>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Assigné à</label>
+          <select id="taskAssignee" class="form-select">
+            <option value="">— Non assigné —</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('taskOverlay')">Annuler</button>
+        <button type="submit" class="btn btn-primary" id="taskSubmitBtn">Créer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Document Viewer Modal -->
+<div class="overlay" id="viewerOverlay">
+  <div class="modal modal-lg">
+    <div class="modal-header">
+      <h2 class="modal-title" id="viewerTitle">Document</h2>
+      <div style="display:flex;gap:8px">
+        <a id="viewerDownload" class="btn btn-secondary btn-sm" download>⬇ Télécharger</a>
+        <button class="modal-close" onclick="closeModal('viewerOverlay')">✕</button>
+      </div>
+    </div>
+    <div id="viewerContent" style="overflow:hidden;border-radius:8px"></div>
+  </div>
+</div>
+
+<!-- Confirm dialog -->
+<div class="overlay" id="confirmOverlay">
+  <div class="modal" style="max-width:380px">
+    <div class="confirm-icon">🗑️</div>
+    <h3 class="modal-title text-center" id="confirmTitle">Confirmer</h3>
+    <p class="confirm-msg" id="confirmMsg"></p>
+    <p class="confirm-sub">Cette action est irréversible.</p>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="confirmCancel">Annuler</button>
+      <button class="btn btn-danger" id="confirmOk">Supprimer</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/js/app.js"></script>
+<script>
+  if (!requireAuth()) throw new Error('unauth');
+  setupSidebar('projects');
+
+  const projectId = window.location.pathname.split('/').pop();
+  const currentUser = getUser();
+  let project = null;
+  let tasks = [];
+  let docs = [];
+  let members = [];
+  let taskFilter = 'all';
+
+  // ===== Tab switching =====
+  function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + tab));
+  }
+
+  // ===== Load project info =====
+  async function loadProject() {
+    try {
+      project = await api(`/projects/${projectId}`);
+      const h = document.getElementById('projHeader');
+      h.style.borderColor = project.color + '33';
+      h.querySelector('::before');
+      // Set accent color
+      const strip = document.createElement('div');
+      strip.style.cssText = `position:absolute;top:0;left:0;right:0;height:4px;background:${project.color};border-radius:16px 16px 0 0`;
+      h.style.position = 'relative';
+      h.prepend(strip);
+
+      document.getElementById('projName').textContent = project.name;
+      document.getElementById('projDesc').textContent = project.description || '';
+      document.getElementById('projStatus').className = `badge badge-${project.status}`;
+      document.getElementById('projStatus').textContent = {active:'Actif',completed:'Terminé',archived:'Archivé'}[project.status];
+      document.getElementById('projOwner').textContent = `👤 ${project.owner_name || '—'}`;
+      document.getElementById('projDate').textContent = `📅 Créé le ${fmtDate(project.created_at)}`;
+      document.title = `PDMS — ${project.name}`;
+
+      // Members
+      members = project.members || [];
+      renderMembers();
+
+      // Progress
+      const stats = project.task_stats || {};
+      document.getElementById('progressPct').textContent = project.progress + '%';
+      document.getElementById('progressFill').style.width = project.progress + '%';
+      if (project.progress === 100) document.getElementById('progressFill').classList.add('full');
+
+      document.getElementById('taskStatsBadges').innerHTML = `
+        <span class="badge badge-todo">À faire: ${stats.todo || 0}</span>
+        <span class="badge badge-in_progress">En cours: ${stats.in_progress || 0}</span>
+        <span class="badge badge-done">Terminées: ${stats.done || 0}</span>
+      `;
+
+      // Admin actions
+      if (currentUser.role === 'admin' || project.owner_id === currentUser.id) {
+        document.getElementById('projHeaderActions').innerHTML = `
+          <a href="/projects" class="btn btn-secondary btn-sm">← Retour</a>
+        `;
+      }
+
+      // Load members for task assignee dropdown
+      await loadMembersForSelect();
+
+    } catch(e) {
+      toast(e.message, 'error');
+      setTimeout(() => window.location.href = '/projects', 2000);
+    }
+  }
+
+  function renderMembers() {
+    const el = document.getElementById('membersArea');
+    if (!members.length) { el.innerHTML = ''; return; }
+    el.innerHTML = `<div style="font-size:.78rem;color:var(--t3);margin-bottom:6px">Membres</div>
+      <div class="member-chips">${members.map(m => `
+        <div class="chip">
+          <div class="chip-avatar">${m.name.charAt(0).toUpperCase()}</div>
+          ${m.name} <span class="badge badge-${m.role}" style="padding:1px 6px">${m.role}</span>
+        </div>`).join('')}
+      </div>`;
+  }
+
+  async function loadMembersForSelect() {
+    try {
+      const users = await api('/users/all-for-select');
+      const sel = document.getElementById('taskAssignee');
+      sel.innerHTML = '<option value="">— Non assigné —</option>';
+      users.forEach(u => {
+        const opt = document.createElement('option');
+        opt.value = u.id;
+        opt.textContent = `${u.name} (${u.role})`;
+        sel.appendChild(opt);
+      });
+    } catch { /* non-admin: skip */ }
+  }
+
+  // ===== Documents =====
+  async function loadDocs() {
+    try {
+      docs = await api(`/documents/project/${projectId}`);
+      renderDocs();
+    } catch(e) { toast(e.message, 'error'); }
+  }
+
+  function renderDocs() {
+    const el = document.getElementById('docList');
+    if (!docs.length) {
+      el.innerHTML = `<div class="empty"><span class="empty-icon">📂</span><h3>Aucun document</h3><p>Glissez un fichier ou cliquez sur la zone d'upload.</p></div>`;
+      return;
+    }
+    el.innerHTML = `<div class="doc-list">${docs.map(d => `
+      <div class="doc-item">
+        <div class="doc-icon ${d.file_type}">${docIcon(d.file_type)}</div>
+        <div class="doc-info">
+          <div class="doc-name">${d.original_name}</div>
+          <div class="doc-meta">${d.file_type?.toUpperCase()} • ${fmtSize(d.file_size)} • Par ${d.uploaded_by_name || '—'} • ${fmtDate(d.created_at)}</div>
+        </div>
+        <div class="doc-actions">
+          <button class="btn btn-secondary btn-sm" onclick="viewDoc(${d.id}, '${d.original_name.replace(/'/g,"\\'")}', '${d.file_type}')">👁 Lire</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteDoc(${d.id}, '${d.original_name.replace(/'/g,"\\'")}')">🗑</button>
+        </div>
+      </div>`).join('')}</div>`;
+  }
+
+  // Upload
+  const uploadZone = document.getElementById('uploadZone');
+  const fileInput = document.getElementById('fileInput');
+
+  uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag'); });
+  uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag'));
+  uploadZone.addEventListener('drop', e => {
+    e.preventDefault(); uploadZone.classList.remove('drag');
+    uploadFiles(e.dataTransfer.files);
+  });
+  fileInput.addEventListener('change', () => uploadFiles(fileInput.files));
+
+  async function uploadFiles(files) {
+    if (!files.length) return;
+    const prog = document.getElementById('uploadProgress');
+    const bar = document.getElementById('uploadBar');
+    const status = document.getElementById('uploadStatus');
+    prog.style.display = 'block';
+    let done = 0;
+    for (const file of files) {
+      status.textContent = `Upload de ${file.name}…`;
+      const fd = new FormData();
+      fd.append('file', file);
+      try {
+        await api(`/documents/project/${projectId}`, { method: 'POST', body: fd });
+        done++;
+        bar.style.width = Math.round((done / files.length) * 100) + '%';
+        toast(`${file.name} uploadé !`, 'success');
+      } catch(e) { toast(`Erreur: ${file.name} — ${e.message}`, 'error'); }
+    }
+    status.textContent = 'Terminé !';
+    setTimeout(() => { prog.style.display = 'none'; bar.style.width = '0'; }, 1500);
+    fileInput.value = '';
+    loadDocs();
+    loadProject(); // refresh stats
+  }
+
+  async function viewDoc(id, name, type) {
+    document.getElementById('viewerTitle').textContent = name;
+    document.getElementById('viewerDownload').href = `/api/documents/${id}/view`;
+    document.getElementById('viewerDownload').download = name;
+    const content = document.getElementById('viewerContent');
+    content.innerHTML = `<div class="loader"><div class="spinner"></div></div>`;
+    openModal('viewerOverlay');
+
+    const url = `/api/documents/${id}/view?token=${getToken()}`;
+    // We need to send auth header, so fetch the file as blob
+    try {
+      const res = await fetch(`/api/documents/${id}/view`, {
+        headers: { 'Authorization': `Bearer ${getToken()}` }
+      });
+      if (!res.ok) throw new Error('Fichier introuvable');
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+
+      if (type === 'pdf') {
+        content.innerHTML = `<iframe src="${blobUrl}" class="doc-viewer"></iframe>`;
+      } else if (type === 'txt') {
+        const text = await blob.text();
+        content.innerHTML = `<pre class="txt-viewer">${text.replace(/</g,'&lt;')}</pre>`;
+      } else if (type === 'word') {
+        const arrayBuffer = await blob.arrayBuffer();
+        const result = await mammoth.convertToHtml({ arrayBuffer });
+        content.innerHTML = `<div class="word-viewer">${result.value}</div>`;
+      } else {
+        content.innerHTML = `<div class="empty"><span class="empty-icon">📎</span><h3>Aperçu non disponible</h3><p><a href="${blobUrl}" download="${name}" class="btn btn-primary btn-sm">⬇ Télécharger le fichier</a></p></div>`;
+      }
+    } catch(e) { content.innerHTML = `<div class="empty"><span class="empty-icon">❌</span><h3>Erreur</h3><p>${e.message}</p></div>`; }
+  }
+
+  async function deleteDoc(id, name) {
+    confirm('Supprimer le document', `Supprimer "${name}" ?`, async () => {
+      try {
+        await api(`/documents/${id}`, { method: 'DELETE' });
+        toast('Document supprimé', 'success');
+        loadDocs(); loadProject();
+      } catch(e) { toast(e.message, 'error'); }
+    });
+  }
+
+  // ===== Tasks =====
+  async function loadTasks() {
+    try {
+      tasks = await api(`/tasks/project/${projectId}`);
+      renderTasks();
+    } catch(e) { toast(e.message, 'error'); }
+  }
+
+  function renderTasks() {
+    const el = document.getElementById('taskList');
+    let list = tasks;
+    if (taskFilter === 'all') {}
+    else if (taskFilter === 'high') list = list.filter(t => t.priority === 'high' && t.status !== 'done');
+    else list = list.filter(t => t.status === taskFilter);
+
+    if (!list.length) {
+      el.innerHTML = `<div class="empty"><span class="empty-icon">✅</span><h3>Aucune tâche ici</h3><p>Créez votre première tâche pour ce projet.</p></div>`;
+      return;
+    }
+    el.innerHTML = `<div class="task-list">${list.map(t => `
+      <div class="task-item ${t.status === 'done' ? 'done-item' : ''}">
+        <button class="status-btn ${t.status}" onclick="cycleStatus(${t.id}, '${t.status}')" title="Changer le statut"></button>
+        <div class="task-body">
+          <div class="task-title ${t.status === 'done' ? 'done' : ''}">${t.title}</div>
+          ${t.description ? `<div class="task-desc">${t.description}</div>` : ''}
+          <div class="task-meta">
+            <span class="badge badge-${t.priority}">${priorityLabel(t.priority)}</span>
+            <span class="badge badge-${t.status}">${statusLabel(t.status)}</span>
+            ${t.due_date ? `<span class="${dueCls(t.due_date, t.status)}">📅 ${relDate(t.due_date)} (${fmtDate(t.due_date)})</span>` : ''}
+            ${t.assigned_to_name ? `<span class="text-xs text-muted">👤 ${t.assigned_to_name}</span>` : ''}
+          </div>
+        </div>
+        <div class="task-actions">
+          <button class="btn btn-secondary btn-xs btn-icon" onclick="editTask(${t.id})" title="Modifier">✏️</button>
+          <button class="btn btn-danger btn-xs btn-icon" onclick="deleteTask(${t.id}, '${t.title.replace(/'/g,"\\'")}')">🗑</button>
+        </div>
+      </div>`).join('')}</div>`;
+  }
+
+  async function cycleStatus(id, current) {
+    const next = { todo: 'in_progress', in_progress: 'done', done: 'todo' }[current];
+    try {
+      await api(`/tasks/${id}`, { method: 'PUT', body: JSON.stringify({ status: next }) });
+      await Promise.all([loadTasks(), loadProject()]);
+    } catch(e) { toast(e.message, 'error'); }
+  }
+
+  function editTask(id) {
+    const t = tasks.find(x => x.id === id);
+    if (!t) return;
+    document.getElementById('taskId').value = t.id;
+    document.getElementById('taskTitle').value = t.title;
+    document.getElementById('taskDesc').value = t.description || '';
+    document.getElementById('taskPriority').value = t.priority;
+    document.getElementById('taskStatus').value = t.status;
+    document.getElementById('taskDue').value = t.due_date ? t.due_date.replace(' ', 'T').substring(0, 16) : '';
+    document.getElementById('taskAssignee').value = t.assigned_to || '';
+    document.getElementById('taskModalTitle').textContent = 'Modifier la tâche';
+    document.getElementById('taskSubmitBtn').textContent = 'Enregistrer';
+    openModal('taskOverlay');
+  }
+
+  async function deleteTask(id, title) {
+    confirm('Supprimer la tâche', `Supprimer "${title}" ?`, async () => {
+      try {
+        await api(`/tasks/${id}`, { method: 'DELETE' });
+        toast('Tâche supprimée', 'success');
+        await Promise.all([loadTasks(), loadProject()]);
+      } catch(e) { toast(e.message, 'error'); }
+    });
+  }
+
+  document.getElementById('btnNewTask').addEventListener('click', () => {
+    document.getElementById('taskId').value = '';
+    document.getElementById('taskTitle').value = '';
+    document.getElementById('taskDesc').value = '';
+    document.getElementById('taskPriority').value = 'medium';
+    document.getElementById('taskStatus').value = 'todo';
+    document.getElementById('taskDue').value = '';
+    document.getElementById('taskAssignee').value = '';
+    document.getElementById('taskModalTitle').textContent = 'Nouvelle tâche';
+    document.getElementById('taskSubmitBtn').textContent = 'Créer';
+    openModal('taskOverlay');
+  });
+
+  document.getElementById('taskForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const id = document.getElementById('taskId').value;
+    const due = document.getElementById('taskDue').value;
+    const assignee = document.getElementById('taskAssignee').value;
+    const body = {
+      title: document.getElementById('taskTitle').value.trim(),
+      description: document.getElementById('taskDesc').value.trim(),
+      priority: document.getElementById('taskPriority').value,
+      status: document.getElementById('taskStatus').value,
+      due_date: due ? due.replace('T', ' ') : null,
+      assigned_to: assignee ? parseInt(assignee) : null
+    };
+    try {
+      if (id) await api(`/tasks/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+      else await api(`/tasks/project/${projectId}`, { method: 'POST', body: JSON.stringify(body) });
+      toast(id ? 'Tâche mise à jour' : 'Tâche créée !', 'success');
+      closeModal('taskOverlay');
+      await Promise.all([loadTasks(), loadProject()]);
+    } catch(ex) { toast(ex.message, 'error'); }
+  });
+
+  // Task filters
+  document.querySelectorAll('[data-tf]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('[data-tf]').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      taskFilter = btn.dataset.tf;
+      renderTasks();
+    });
+  });
+
+  // Close modals on background
+  ['taskOverlay','viewerOverlay','confirmOverlay'].forEach(id => {
+    document.getElementById(id)?.addEventListener('click', e => {
+      if (e.target === e.currentTarget) closeModal(id);
+    });
+  });
+
+  // Init
+  loadProject();
+  loadDocs();
+  loadTasks();
+</script>
+</body>
+</html>

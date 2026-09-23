@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+pdm-frontend/
+
+# Environment variables & local DB
+.env
+pdms.db
+pdms.db-shm
+pdms.db-wal
+
+# Uploaded user files
+uploads/*
+!uploads/.gitkeep
+
+# Logs & temp files
+*.log
+.DS_Store
+Thumbs.db

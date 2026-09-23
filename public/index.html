@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDMS — Connexion</title>
+  <meta name="description" content="Connectez-vous à votre espace PDMS de gestion de projets et documents.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="login-body">
+  <div class="login-overlay"></div>
+  
+  <div class="login-page">
+    <div class="login-card">
+      <div class="login-header">
+        <div class="logo-badge">
+          <span class="logo-emoji">📂</span>
+        </div>
+        <h1 class="login-title">Bienvenue sur PDMS</h1>
+        <p class="login-sub">Système de gestion de projets &amp; documents</p>
+      </div>
+
+      <div id="errBox" class="error-box"></div>
+
+      <form id="loginForm" autocomplete="on">
+        <div class="form-group">
+          <label class="form-label" for="email">Adresse email</label>
+          <div class="input-wrap">
+            <span class="input-icon">✉️</span>
+            <input type="email" id="email" class="form-input" placeholder="admin@pdms.com"
+              required autocomplete="email">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="password">Mot de passe</label>
+          <div class="input-wrap">
+            <span class="input-icon">🔒</span>
+            <input type="password" id="password" class="form-input" placeholder="••••••••"
+              required autocomplete="current-password">
+          </div>
+        </div>
+
+        <button type="submit" id="loginBtn" class="btn btn-login w-full">
+          <span>Se connecter</span>
+          <span class="btn-arrow">→</span>
+        </button>
+      </form>
+
+      <div class="login-footer">
+        <p>🔒 Espace de travail sécurisé &bull; PDMS v1.0</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/auth.js"></script>
+  <script>
+    if (getToken()) window.location.href = '/dashboard';
+
+    document.getElementById('loginForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      const btn = document.getElementById('loginBtn');
+      const err = document.getElementById('errBox');
+      btn.disabled = true;
+      btn.innerHTML = '<span>Connexion en cours…</span>';
+      err.classList.remove('show');
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: document.getElementById('email').value.trim(),
+            password: document.getElementById('password').value
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Échec de connexion');
+        setToken(data.token);
+        setUser(data.user);
+        window.location.href = '/dashboard';
+      } catch (ex) {
+        err.textContent = ex.message;
+        err.classList.add('show');
+        btn.disabled = false;
+        btn.innerHTML = '<span>Se connecter</span><span class="btn-arrow">→</span>';
+      }
+    });
+  </script>
+</body>
+</html>

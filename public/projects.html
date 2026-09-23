@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDMS — Projets</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="app">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-logo"><div class="logo-icon">📋</div><span class="logo-text">PDMS</span></div>
+    <div class="sidebar-nav">
+      <a href="/dashboard" class="nav-item" data-page="dashboard"><span class="nav-icon">🏠</span>Tableau de bord</a>
+      <a href="/projects" class="nav-item" data-page="projects"><span class="nav-icon">📁</span>Mes Projets</a>
+      <div class="nav-label admin-only">Administration</div>
+      <a href="/admin" class="nav-item admin-only" data-page="admin"><span class="nav-icon">⚙️</span>Utilisateurs</a>
+    </div>
+    <div class="sidebar-footer">
+      <div class="avatar" id="sidebarAvatar">A</div>
+      <div class="user-info"><div class="user-name" id="sidebarName">…</div><div class="user-role" id="sidebarRole">…</div></div>
+      <button class="btn-logout" id="logoutBtn" title="Déconnexion">↪</button>
+    </div>
+  </nav>
+
+  <main class="main">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Projets</h1>
+        <p class="page-sub" id="projCount">Chargement…</p>
+      </div>
+      <button class="btn btn-primary" id="btnNewProj">+ Nouveau projet</button>
+    </div>
+
+    <!-- Filters + Search -->
+    <div class="flex items-center gap-3 mb-4 flex-wrap">
+      <div class="search-wrap" style="flex:1;min-width:220px">
+        <span class="search-icon">🔍</span>
+        <input type="text" class="search-input" id="searchInput" placeholder="Rechercher un projet…">
+      </div>
+      <div class="filters" style="margin-bottom:0">
+        <button class="filter-btn active" data-filter="all">Tous</button>
+        <button class="filter-btn" data-filter="active">Actifs</button>
+        <button class="filter-btn" data-filter="completed">Terminés</button>
+        <button class="filter-btn" data-filter="archived">Archivés</button>
+      </div>
+    </div>
+
+    <div id="projectsGrid" class="projects-grid">
+      <div class="loader"><div class="spinner"></div></div>
+    </div>
+  </main>
+</div>
+
+<!-- New / Edit Project Modal -->
+<div class="overlay" id="projOverlay">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 class="modal-title" id="projModalTitle">Nouveau projet</h2>
+      <button class="modal-close" onclick="closeModal('projOverlay')">✕</button>
+    </div>
+    <form id="projForm">
+      <input type="hidden" id="projId">
+      <div class="form-group">
+        <label class="form-label">Nom du projet *</label>
+        <input type="text" id="projName" class="form-input" placeholder="Ex : Rapport annuel 2025" required maxlength="100">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Description</label>
+        <textarea id="projDesc" class="form-textarea" placeholder="Description du projet…" rows="3"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Statut</label>
+        <select id="projStatus" class="form-select">
+          <option value="active">Actif</option>
+          <option value="completed">Terminé</option>
+          <option value="archived">Archivé</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Couleur</label>
+        <div class="color-picker" id="colorPicker"></div>
+        <input type="hidden" id="projColor" value="#6366f1">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('projOverlay')">Annuler</button>
+        <button type="submit" class="btn btn-primary" id="projSubmitBtn">Créer</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Confirm dialog -->
+<div class="overlay" id="confirmOverlay">
+  <div class="modal" style="max-width:380px">
+    <div class="confirm-icon">🗑️</div>
+    <h3 class="modal-title text-center" id="confirmTitle">Confirmer la suppression</h3>
+    <p class="confirm-msg" id="confirmMsg"></p>
+    <p class="confirm-sub">Cette action est irréversible.</p>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="confirmCancel">Annuler</button>
+      <button class="btn btn-danger" id="confirmOk">Supprimer</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/auth.js"></script>
+<script src="/js/app.js"></script>
+<script>
+  if (!requireAuth()) throw new Error('unauth');
+  setupSidebar('projects');
+
+  const COLORS = ['#6366f1','#8b5cf6','#ec4899','#10b981','#f59e0b','#3b82f6','#ef4444','#14b8a6','#f97316','#06b6d4'];
+  let allProjects = [];
+  let currentFilter = 'all';
+
+  // Color picker
+  const cpEl = document.getElementById('colorPicker');
+  COLORS.forEach(c => {
+    const sw = document.createElement('div');
+    sw.className = 'color-swatch';
+    sw.style.background = c;
+    sw.dataset.color = c;
+    if (c === '#6366f1') sw.classList.add('selected');
+    sw.addEventListener('click', () => {
+      document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
+      sw.classList.add('selected');
+      document.getElementById('projColor').value = c;
+    });
+    cpEl.appendChild(sw);
+  });
+
+  async function loadProjects() {
+    try {
+      allProjects = await api('/projects');
+      renderProjects();
+    } catch(e) { toast(e.message, 'error'); }
+  }
+
+  function renderProjects() {
+    const q = document.getElementById('searchInput').value.toLowerCase();
+    let list = allProjects;
+    if (currentFilter !== 'all') list = list.filter(p => p.status === currentFilter);
+    if (q) list = list.filter(p => p.name.toLowerCase().includes(q) || (p.description||'').toLowerCase().includes(q));
+
+    document.getElementById('projCount').textContent = `${list.length} projet(s)`;
+    const grid = document.getElementById('projectsGrid');
+    if (!list.length) {
+      grid.innerHTML = `<div class="empty" style="grid-column:1/-1"><span class="empty-icon">📁</span><h3>Aucun projet trouvé</h3><p>Créez votre premier projet ou modifiez votre recherche.</p><button class="btn btn-primary" onclick="openNewProj()">+ Nouveau projet</button></div>`;
+      return;
+    }
+    grid.innerHTML = list.map(p => `
+      <a href="/project/${p.id}" class="proj-card" style="--pc:${p.color}" onclick="handleCardClick(event, ${p.id})">
+        <div style="position:absolute;top:0;left:0;right:0;height:4px;background:${p.color};border-radius:16px 16px 0 0"></div>
+        <div class="proj-card-header">
+          <div>
+            <div class="proj-name">${p.name}</div>
+            <span class="badge badge-${p.status}" style="margin-top:4px">${{active:'Actif',completed:'Terminé',archived:'Archivé'}[p.status]}</span>
+          </div>
+          <div class="proj-actions" style="position:absolute;top:18px;right:16px;opacity:0;transition:opacity .2s">
+            <button class="btn btn-secondary btn-xs btn-icon" onclick="editProj(event,${p.id})" title="Modifier">✏️</button>
+            <button class="btn btn-danger btn-xs btn-icon" onclick="deleteProj(event,${p.id},'${p.name.replace(/'/g,"\\'")}',this)" title="Supprimer">🗑️</button>
+          </div>
+        </div>
+        <p class="proj-desc">${p.description || 'Aucune description'}</p>
+        <div class="proj-stats">
+          <span class="proj-stat">📄 ${p.doc_count} doc(s)</span>
+          <span class="proj-stat">✅ ${p.task_count} tâche(s)</span>
+          <span class="proj-stat">👥 ${p.member_count} membre(s)</span>
+        </div>
+        <div class="progress-wrap">
+          <div class="progress-info"><span>Progression</span><span>${p.progress}%</span></div>
+          <div class="progress-bar"><div class="progress-fill ${p.progress===100?'full':''}" style="width:${p.progress}%"></div></div>
+        </div>
+      </a>`).join('');
+
+    // Show actions on hover
+    document.querySelectorAll('.proj-card').forEach(card => {
+      const actions = card.querySelector('.proj-actions');
+      card.addEventListener('mouseenter', () => actions && (actions.style.opacity = '1'));
+      card.addEventListener('mouseleave', () => actions && (actions.style.opacity = '0'));
+    });
+  }
+
+  function handleCardClick(e, id) {
+    if (e.target.closest('.proj-actions')) e.preventDefault();
+  }
+
+  function openNewProj() {
+    document.getElementById('projId').value = '';
+    document.getElementById('projName').value = '';
+    document.getElementById('projDesc').value = '';
+    document.getElementById('projStatus').value = 'active';
+    document.getElementById('projColor').value = '#6366f1';
+    document.querySelectorAll('.color-swatch').forEach(s => s.classList.toggle('selected', s.dataset.color === '#6366f1'));
+    document.getElementById('projModalTitle').textContent = 'Nouveau projet';
+    document.getElementById('projSubmitBtn').textContent = 'Créer';
+    openModal('projOverlay');
+  }
+
+  async function editProj(e, id) {
+    e.preventDefault(); e.stopPropagation();
+    const p = allProjects.find(x => x.id === id);
+    if (!p) return;
+    document.getElementById('projId').value = p.id;
+    document.getElementById('projName').value = p.name;
+    document.getElementById('projDesc').value = p.description || '';
+    document.getElementById('projStatus').value = p.status;
+    document.getElementById('projColor').value = p.color;
+    document.querySelectorAll('.color-swatch').forEach(s => s.classList.toggle('selected', s.dataset.color === p.color));
+    document.getElementById('projModalTitle').textContent = 'Modifier le projet';
+    document.getElementById('projSubmitBtn').textContent = 'Enregistrer';
+    openModal('projOverlay');
+  }
+
+  function deleteProj(e, id, name) {
+    e.preventDefault(); e.stopPropagation();
+    confirm('Supprimer le projet', `Supprimer "${name}" et tout son contenu ?`, async () => {
+      try {
+        await api(`/projects/${id}`, { method: 'DELETE' });
+        toast('Projet supprimé', 'success');
+        loadProjects();
+      } catch(ex) { toast(ex.message, 'error'); }
+    });
+  }
+
+  document.getElementById('btnNewProj').addEventListener('click', openNewProj);
+
+  document.getElementById('projForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const id = document.getElementById('projId').value;
+    const body = {
+      name: document.getElementById('projName').value.trim(),
+      description: document.getElementById('projDesc').value.trim(),
+      status: document.getElementById('projStatus').value,
+      color: document.getElementById('projColor').value
+    };
+    try {
+      if (id) await api(`/projects/${id}`, { method: 'PUT', body: JSON.stringify(body) });
+      else await api('/projects', { method: 'POST', body: JSON.stringify(body) });
+      toast(id ? 'Projet mis à jour' : 'Projet créé !', 'success');
+      closeModal('projOverlay');
+      loadProjects();
+    } catch(ex) { toast(ex.message, 'error'); }
+  });
+
+  document.getElementById('searchInput').addEventListener('input', renderProjects);
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      currentFilter = btn.dataset.filter;
+      renderProjects();
+    });
+  });
+
+  // Close modal on background click
+  document.getElementById('projOverlay').addEventListener('click', e => {
+    if (e.target === e.currentTarget) closeModal('projOverlay');
+  });
+
+  loadProjects();
+</script>
+</body>
+</html>
